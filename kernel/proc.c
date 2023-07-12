@@ -114,6 +114,7 @@ allocproc(void)
       release(&p->lock);
     }
   }
+  
   return 0;
 
 found:
@@ -140,7 +141,7 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
-
+  p->syscall_trace = 0;
   return p;
 }
 
@@ -303,6 +304,8 @@ fork(void)
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
+  np->syscall_trace = p->syscall_trace; //子进程继承父进程的 syscall_trace
+  
   pid = np->pid;
 
   release(&np->lock);
