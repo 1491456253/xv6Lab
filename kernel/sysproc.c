@@ -1,8 +1,8 @@
 #include "types.h"
 #include "riscv.h"
+#include "param.h"
 #include "defs.h"
 #include "date.h"
-#include "param.h"
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
@@ -46,6 +46,7 @@ sys_sbrk(void)
 
   if(argint(0, &n) < 0)
     return -1;
+  
   addr = myproc()->sz;
   if(growproc(n) < 0)
     return -1;
@@ -55,8 +56,10 @@ sys_sbrk(void)
 uint64
 sys_sleep(void)
 {
+  backtrace();
   int n;
   uint ticks0;
+
 
   if(argint(0, &n) < 0)
     return -1;
@@ -72,6 +75,88 @@ sys_sleep(void)
   release(&tickslock);
   return 0;
 }
+
+uint64
+sys_sigalarm(void)
+{
+  int interval;
+  uint64 handler;
+  struct proc* p;
+
+  p = myproc();
+
+  if (argint(0, &interval) < 0 || argaddr(1, &handler) < 0) {
+    return -1;
+  }
+  p->siginterval = interval;
+  p->sigfunc = handler;
+  return 0;
+}
+
+uint64
+sys_sigreturn(void)
+{
+  struct proc* p = myproc();
+  memmove(p->trapframe, p->sigframe, sizeof(struct trapframe));
+  p->isentry = 0;
+  return 0;
+}
+
+
+#ifdef LAB_PGTBL
+int
+sys_pgaccess(void)
+{
+  // lab pgtbl: your code here.
+  unsigned int procmask = 0 ;
+  uint64 mask;  
+  int len;  
+ 
+  pagetable_t pagetable = 0;  
+  
+  pte_t *pte;
+  uint64 base;
+  struct proc *p = myproc();
+ 
+  if(argaddr(0, &base) < 0 || argint(1, &len) < 0 || argaddr(2, &mask) < 0)//使用argaddr()和argint()解析参数
+    return -1;
+  if (len > sizeof(int)*8) 
+    len = sizeof(int)*8;
+ 
+  for(int i=0; i<len; i++) {
+    pagetable = p->pagetable;
+      
+    if(base >= MAXVA)
+      panic("pgaccess");
+ 
+    for(int level = 2; level > 0; level--) {
+      pte = &pagetable[PX(level, base)];
+      if(*pte & PTE_V) {
+        pagetable = (pagetable_t)PTE2PA(*pte);
+      } else {
+        return -1;
+      }      
+    }
+    pte = &pagetable[PX(0, base)];
+    if(pte == 0)
+      return -1;
+    if((*pte & PTE_V) == 0)
+      return -1;
+    if((*pte & PTE_U) == 0)
+      return -1;  
+    if(*pte & PTE_A) {  
+      procmask = procmask | (1L << i);
+      *pte = *pte & (~PTE_A);
+    }
+    base += PGSIZE;
+  }
+ 
+  pagetable = p->pagetable;
+  return copyout(pagetable, mask, (char *) &procmask, sizeof(unsigned int));
+
+  return 0;
+}
+#endif
 
 uint64
 sys_kill(void)

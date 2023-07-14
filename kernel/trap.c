@@ -72,7 +72,25 @@ usertrap(void)
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
   }
-
+  // give up the CPU if this is a timer interrupt.
+  if(which_dev == 2) {
+      // judge if enable signal alarm.
+      if (p->siginterval > 0) {
+          // ticks has consumed.
+          p->ticks++;
+          if (!p->isentry && p->ticks >= p->siginterval) {
+              // save the registers
+              memmove(p->sigframe, p->trapframe, sizeof (struct trapframe));
+              // when we return to user mode, the sigfunc will be executed.
+              p->trapframe->epc = p->sigfunc;
+              // 're-arm' the counter.
+              p->ticks = 0;
+              // prevent re-entrant calls before invoke sigreturn
+              p->isentry = 1;
+          }
+      }
+      yield();
+  }
   if(p->killed)
     exit(-1);
 
