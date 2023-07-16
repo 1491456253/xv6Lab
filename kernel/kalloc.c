@@ -9,6 +9,10 @@
 #include "riscv.h"
 #include "defs.h"
 
+// 物理内存页的使用次数
+int useReference[PHYSTOP/PGSIZE];
+struct spinlock ref_count_lock;
+
 void freerange(void *pa_start, void *pa_end);
 
 extern char end[]; // first address after kernel.
@@ -47,9 +51,17 @@ void
 kfree(void *pa)
 {
   struct run *r;
-
+  int tmp;
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
+
+  acquire(&ref_count_lock);
+  // decrease the reference count, if use reference is not zero, then return
+  useReference[(uint64)pa/PGSIZE] -= 1;
+  tmp = useReference[(uint64)pa/PGSIZE];
+  release(&ref_count_lock);
+  if (tmp > 0)
+    return;
 
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
@@ -72,8 +84,13 @@ kalloc(void)
 
   acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
+ if(r) {
     kmem.freelist = r->next;
+    acquire(&ref_count_lock);
+    // 初始化引用次数为1，加锁保证操作的原子性
+    useReference[(uint64)r / PGSIZE] = 1;
+    release(&ref_count_lock);
+  }
   release(&kmem.lock);
 
   if(r)
