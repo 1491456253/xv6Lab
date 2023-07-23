@@ -26,17 +26,14 @@ struct {
 void
 kinit()
 {
-  for(int i = 0; i < NCPU; i++){
+  for (int i = 0; i < NCPU; i++)
     initlock(&kmem[i].lock, "kmem");
-  }
   freerange(end, (void*)PHYSTOP);
 }
 
 void
 freerange(void *pa_start, void *pa_end)
 {
-  //push_off();
-  //int id = cpuid();
   char *p;
   p = (char*)PGROUNDUP((uint64)pa_start);
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
@@ -61,12 +58,12 @@ kfree(void *pa)
   r = (struct run*)pa;
 
   push_off();
-  int id = cpuid();
-  acquire(&kmem[id].lock);
-  r->next = kmem[id].freelist;
-  kmem[id].freelist = r;
-  release(&kmem[id].lock);
+  int n = cpuid();
   pop_off();
+  acquire(&kmem[n].lock);
+  r->next = kmem[n].freelist;
+  kmem[n].freelist = r;
+  release(&kmem[n].lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -78,30 +75,49 @@ kalloc(void)
   struct run *r;
 
   push_off();
-  int id = cpuid();
-  acquire(&kmem[id].lock);
-  r = kmem[id].freelist;
-  if(r){
-    kmem[id].freelist = r->next;
-    release(&kmem[id].lock);
-  }else{ // steal part of the other CPU's freelist.
-    release(&kmem[id].lock);
-    for(int j = 0; j < NCPU; j++){
-      if(j == id){
-        continue;
-      }
-      acquire(&kmem[j].lock);
-      r = kmem[j].freelist;
-      if(r){
-        kmem[j].freelist = r->next;
-        release(&kmem[j].lock);
-        break;
-      }else{
-        release(&kmem[j].lock);
+  int me = cpuid();
+  pop_off();
+
+  acquire(&kmem[me].lock);
+  r = kmem[me].freelist;
+  if(r)
+    kmem[me].freelist = r->next;
+  release(&kmem[me].lock);
+
+  if (!r) {
+    // try to steal from other cpu's freelist
+    
+    // since null is not included
+    struct run * stolen = r;
+
+    for (int i = 0; i < NCPU; i++) {
+      if (i != me) {
+        acquire(&kmem[i].lock);
+        if (kmem[i].freelist) {
+          // steal half, to do so, use quick-slow pointers
+          struct run * quick = kmem[i].freelist;
+          struct run * slow = kmem[i].freelist;
+          while (quick->next && quick->next->next) {
+            quick = quick->next->next;
+            slow = slow->next;
+          }
+          stolen = slow->next;
+          slow->next = r;
+        }
+        release(&kmem[i].lock);
+        if (stolen)
+          break;
       }
     }
+
+    if (stolen) {
+      acquire(&kmem[me].lock);
+      kmem[me].freelist = stolen;
+      r = kmem[me].freelist;
+      kmem[me].freelist = r->next;
+      release(&kmem[me].lock);
+    }
   }
-  pop_off();
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
