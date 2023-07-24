@@ -386,7 +386,14 @@ bmap(struct inode *ip, uint bn)
     return addr;
   }
   bn -= NDIRECT;
-
+/*
+接下来，检查 bn 是否小于 NINDIRECT。如果是，则加载间接块，
+如果必要，则分配它。首先检查 ip->addrs[NDIRECT] 是否为零。
+如果为零，则使用 balloc(ip->dev) 分配一个新块，并将其地址存储在 ip->addrs[NDIRECT] 中。
+然后使用 bread(ip->dev, addr) 读取该块，并将其数据指针存储在变量 a 中。
+接下来，检查 a[bn] 是否为零。如果为零，则使用 balloc(ip->dev) 分配一个新块，
+并将其地址存储在 a[bn] 中。然后使用 log_write(bp) 将更改写入日志。
+最后，使用 brelse(bp) 释放缓冲区并返回该地址。*/
   if(bn < NINDIRECT){
     // Load indirect block, allocating if necessary.
     if((addr = ip->addrs[NDIRECT]) == 0)
@@ -436,14 +443,14 @@ itrunc(struct inode *ip)
   struct buf *bp;
   uint *a;
 
-  for(i = 0; i < NDIRECT; i++){
+  for(i = 0; i < NDIRECT; i++){//直接的
     if(ip->addrs[i]){
       bfree(ip->dev, ip->addrs[i]);
       ip->addrs[i] = 0;
     }
   }
 
-  if(ip->addrs[NDIRECT]){
+  if(ip->addrs[NDIRECT]){//释放一次间接的
     bp = bread(ip->dev, ip->addrs[NDIRECT]);
     a = (uint*)bp->data;
     for(j = 0; j < NINDIRECT; j++){
@@ -458,7 +465,7 @@ itrunc(struct inode *ip)
   int k;
   uint *a_doubly;
   struct buf *bp_doubly;
-  if(ip->addrs[NDIRECT+1]){
+  if(ip->addrs[NDIRECT+1]){//释放二次间接的
     bp = bread(ip->dev, ip->addrs[NDIRECT+1]);
     a = (uint*)bp->data;
     for(j = 0; j < NINDIRECT; j++){
@@ -478,7 +485,12 @@ itrunc(struct inode *ip)
     bfree(ip->dev, ip->addrs[NDIRECT+1]);
     ip->addrs[NDIRECT+1] = 0;
   }
-
+  /*
+  程序首先检查双重间接索引是否存在，如果存在，程序会读取这个索引块，
+  然后遍历索引块中的所有索引。对于每个索引，如果它指向了一个索引块，
+  程序会读取这个索引块，然后遍历这个索引块中的所有索引，
+  如果一个索引指向了一个数据块，程序会释放这个数据块，然后释放索引块。
+  最后，程序会释放最初读取的索引块，并把双重间接索引的值设为0。*/
   ip->size = 0;
   iupdate(ip);
 }
