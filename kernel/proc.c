@@ -183,29 +183,30 @@ freeproc(struct proc *p)
 
 extern pagetable_t kernel_pagetable;
 
-// Create a user page table for a given process,
+//给定的进程p创建一个新的页表。
 // with no user memory, but with trampoline pages.
 pagetable_t
 proc_pagetable(struct proc *p)
 {
   pagetable_t pagetable;
 
-  // An empty page table.
+  // 创建了一个空的页表
   pagetable = uvmcreate();
   if(pagetable == 0)
     return 0;
 
-  // map the trampoline code (for system call return)
-  // at the highest user virtual address.
-  // only the supervisor uses it, on the way
-  // to/from user space, so not PTE_U.
+  /*trampoline代码映射到用户虚拟地址空间的最高地址处。
+  这段代码用于在用户空间和内核空间之间切换时保存和恢复寄存器。*/
   if(mappages(pagetable, TRAMPOLINE, PGSIZE,
               (uint64)trampoline, PTE_R | PTE_X) < 0){
     uvmfree(pagetable, 0);
     return 0;
   }
 
-  // map the trapframe just below TRAMPOLINE, for trampoline.S.
+  /*
+  函数使用mappages函数将trapframe映射到TRAMPOLINE下方。
+  这个数据结构用于保存用户空间寄存器，
+  当CPU从用户模式切换到内核模式（例如xv6-riscv中的监管者模式）时。*/
   if(mappages(pagetable, TRAPFRAME, PGSIZE,
               (uint64)(p->trapframe), PTE_R | PTE_W) < 0){
     uvmunmap(pagetable, TRAMPOLINE, 1, 0);
@@ -213,6 +214,8 @@ proc_pagetable(struct proc *p)
     return 0;
   }
 
+/*将用户系统调用页面映射到虚拟地址USYSCALL处。
+如果任何映射操作失败，则函数会取消之前的映射并释放页表。*/
 if(mappages(pagetable, USYSCALL, PGSIZE,
                (uint64)(p->usyscall), PTE_R | PTE_U) < 0){
     uvmunmap(pagetable, TRAMPOLINE, 1, 0);

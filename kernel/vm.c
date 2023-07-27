@@ -439,7 +439,7 @@ printwalk(pagetable_t pagetable, uint level) {
   if (level == 2) prefix = "..";
   else if (level == 1) prefix = ".. ..";
   else prefix = ".. .. ..";
-  for(int i = 0; i < 512; i++){ // 每个页表有512项
+  for(int i = 0; i < 512; i++){ // 由于每个页表都有512项，所以循环的范围是0到511。
     pte_t pte = pagetable[i];
     if(pte & PTE_V){ // 该页表项有效
       uint64 pa = PTE2PA(pte); // 将虚拟地址转换为物理地址
