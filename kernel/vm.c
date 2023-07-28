@@ -303,6 +303,7 @@ uvmfree(pagetable_t pagetable, uint64 sz)
 // physical memory.
 // returns 0 on success, -1 on failure.
 // frees any allocated pages on failure.
+/*用于在实现写时复制（copy-on-write）的fork中将父进程的物理页映射到子进程中。*/
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
@@ -314,7 +315,6 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
-    // PAY ATTENTION!!!
     // 只有父进程内存页是可写的，才会将子进程和父进程都设置为COW和只读的；否则，都是只读的，但是不标记为COW，因为本来就是只读的，不会进行写入
     // 如果不这样做，父进程内存只读的时候，标记为COW，那么经过缺页中断，程序就可以写入数据，于原本的不符合
     if (*pte & PTE_W) {
@@ -369,10 +369,17 @@ int checkcowpage(uint64 va, pte_t *pte, struct proc* p) {
 // Return 0 on success, -1 on error.
 int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
+/*pagetable 是用户进程的页表，
+dstva 是用户空间的目标虚拟地址，
+src 是内核空间的源数据地址，
+len 是要复制的数据长度。*/
 {
   uint64 n, va0, pa0;
 
   while(len > 0){
+    /*使用一个while循环遍历要复制的每个字节。对于每个字节，
+    函数首先计算其所在页面的虚拟地址，并使用 walkaddr 函数获取该页面的物理地址。
+    如果物理地址为0，则返回-1表示失败。*/
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
@@ -384,6 +391,10 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
       p->killed = 1;
     // check
     if (checkcowpage(va0, pte, p)) 
+    /*函数检查该页面是否为COW（写时复制）页面。如果是，
+    则执行COW页面处理代码。处理代码首先使用 kalloc 函数分配一个新的物理页面。
+    如果分配失败，则终止进程。否则，将原始页面的内容复制到新页面中，
+    并更新页表项，使其指向新分配的页面。然后，更新物理地址变量。*/
     {
       char *mem;
       if ((mem = kalloc()) == 0) {
@@ -391,7 +402,6 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
         p->killed = 1;
       }else {
         memmove(mem, (char*)pa0, PGSIZE);
-        // PAY ATTENTION!!!
         // This statement must be above the next statement
         uint flags = PTE_FLAGS(*pte);
         // decrease the reference count of old memory that va0 point

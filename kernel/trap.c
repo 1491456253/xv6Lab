@@ -97,13 +97,13 @@ usertrap(void)
 
     syscall();
   }
-  else if (r_scause() == 15) {
+  else if (r_scause() == 15) {//写页面
     // Store/AMO page fault(write page fault)
     // see Volume II: RISC-V Privileged Architectures V20211203 Page 71
 
     // the faulting virtual address
     // see Volume II: RISC-V Privileged Architectures V20211203 Page 70
-    // the download url is https://github.com/riscv/riscv-isa-manual/releases/download/Priv-v1.12/riscv-privileged-20211203.pdf
+    
     uint64 va = r_stval();
     if (va >= p->sz)
       p->killed = 1;
