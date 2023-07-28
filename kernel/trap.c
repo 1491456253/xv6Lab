@@ -50,22 +50,22 @@ usertrap(void)
   // save user program counter.
   p->trapframe->epc = r_sepc();
   
-  if(r_scause() == 8){
+  if(r_scause() == 8){//中断是系统调用
     // system call
 
-    if(p->killed)
+    if(p->killed)//检查当前进程是否被杀死，如果是，则调用exit函数退出。
       exit(-1);
 
     // sepc points to the ecall instruction,
     // but we want to return to the next instruction.
-    p->trapframe->epc += 4;
+    p->trapframe->epc += 4;//将程序计数器的值增加4，以便返回到系统调用指令的下一条指令。
 
     // an interrupt will change sstatus &c registers,
     // so don't enable until done with those registers.
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
+  } else if((which_dev = devintr()) != 0){//是否是设备中断
     // ok
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
@@ -73,12 +73,18 @@ usertrap(void)
     p->killed = 1;
   }
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2) {
+  if(which_dev == 2) {/*函数检查是否是定时器中断。*/
       // judge if enable signal alarm.
-      if (p->siginterval > 0) {
+      if (p->siginterval > 0) {//如果启用了定时信号，则执行以下操作
           // ticks has consumed.
-          p->ticks++;
+          p->ticks++;//增加当前进程的ticks计数器
           if (!p->isentry && p->ticks >= p->siginterval) {
+            /*如果当前进程不处于信号处理程序中，并且ticks计数器的值大于等于定时器时间间隔，
+            则执行以下操作： 
+            i. 保存当前进程的陷阱帧。 
+            ii. 将程序计数器的值设置为信号处理程序的地址。 
+            iii. 重置ticks计数器。
+            iv. 设置当前进程的isentry字段为1，以防止重入。*/
               // save the registers
               memmove(p->sigframe, p->trapframe, sizeof (struct trapframe));
               // when we return to user mode, the sigfunc will be executed.

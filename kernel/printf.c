@@ -139,9 +139,9 @@ backtrace(void)
   printf("backtrace:\n");
 
   uint64 addr = r_fp();
-  while (PGROUNDUP(addr) - PGROUNDDOWN(addr) == PGSIZE)
+  while (PGROUNDUP(addr) - PGROUNDDOWN(addr) == PGSIZE)//判断addr是否在同一个内存页中，为了确保addr指向的是一个有效的栈帧
   {
-    uint64 ret_addr = *(uint64 *)(addr - 8);
+    uint64 ret_addr = *(uint64 *)(addr - 8);//addr每次存这个函数的栈帧，-8就是上一个的
     printf("%p\n", ret_addr);
     addr = *((uint64 *)(addr - 16));
   }
