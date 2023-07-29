@@ -7,7 +7,8 @@
 
 	.globl thread_switch
 thread_switch:
-	/* YOUR CODE HERE */sd ra, 0(a0)
+	/* YOUR CODE HERE */
+    sd ra, 0(a0)
     sd sp, 8(a0)
     sd s0, 16(a0)
     sd s1, 24(a0)
