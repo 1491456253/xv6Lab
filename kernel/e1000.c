@@ -102,10 +102,19 @@ e1000_transmit(struct mbuf *m)
   // the TX descriptor ring so that the e1000 sends it. Stash
   // a pointer so that it can be freed after sending.
   //
+  /*mbuf是一个数据结构，它包含要发送的以太网帧数据。
+  TX描述符环是E1000网络设备用来管理要发送的数据包的数据结构。*/
+  /*函数还存储了一个指向mbuf的指针，以便在E1000设备发送数据包后释放它。
+  这是必要的，因为mbuf是动态分配的，如果不释放它们，将会导致内存泄漏。*/
   acquire(&e1000_lock);
   uint reg_tdt = regs[E1000_TDT];
+  /*函数获取e1000_lock锁以确保线程安全。然后，它读取E1000_TDT控制寄存器的值，
+  该值表示E1000下一个期望接收数据包的TX环索引。*/
 
   // If the previous buf has not been sent,return error.
+  /*代码检查上一个缓冲区是否已发送。
+  如果在由E1000_TDT索引的描述符中未设置E1000_TXD_STAT_DD，
+  则E1000尚未完成相应的上一个传输请求，因此返回错误。*/
   if((tx_ring[reg_tdt].status & E1000_TXD_STAT_DD) == 0){
       return -1;
   }
@@ -118,9 +127,14 @@ e1000_transmit(struct mbuf *m)
   tx_ring[reg_tdt].length = m->len;
   tx_ring[reg_tdt].addr = (uint64)(m->head);
   tx_ring[reg_tdt].cmd = 9;
+  /*如果上一个缓冲区已发送，则释放旧缓冲区（如果有）。
+  然后，将mbuf指针存储在tx_mbufs数组中，
+  并将mbuf的长度和数据指针（m->head）编程到描述符中。最后，设置必要的cmd标志*/
 
   regs[E1000_TDT] = (regs[E1000_TDT] + 1) % TX_RING_SIZE;
   release(&e1000_lock);
+  /*最后，通过将1添加到E1000_TDT模TX_RING_SIZE来更新环位置，并释放锁。
+  如果成功将mbuf添加到环中，则返回0；否则返回-1。*/
   return 0;
 }
  
@@ -136,6 +150,8 @@ e1000_recv(void)
   //
   uint reg_rdt = regs[E1000_RDT];
   int i = (reg_rdt + 1)%RX_RING_SIZE;
+  /*它读取E1000_RDT控制寄存器的值，该值表示下一个等待接收数据包
+  （如果有）所在位置的环索引。然后，它计算下一个要检查的RX环索引。*/
 
   while(rx_ring[i].status & E1000_RXD_STAT_DD){
       rx_mbufs[i]->len = rx_ring[i].length;
@@ -146,6 +162,14 @@ e1000_recv(void)
       rx_ring[i].status = 0;
       i = (i + 1) % RX_RING_SIZE;
   }
+  /*接下来，代码进入一个循环，该循环检查RX环中的每个描述符，以查看是否有新数据包可用。
+  如果描述符状态部分中的E1000_RXD_STAT_DD位被设置，则表示有新数据包可用。
+  对于每个可用的数据包，代码将mbuf的长度更新为描述符报告的长度，
+  并使用net_rx()将mbuf交付给网络堆栈。
+  然后，它使用mbufalloc()分配一个新的mbuf以替换刚刚交给net_rx()的那个，
+  并将其数据指针（m->head）编程到描述符中。最后，它将描述符状态位清零。
+  循环继续检查RX环中的下一个描述符，直到没有更多新数据包可用为止。
+  最后，代码更新E1000_RDT寄存器以指向最后一个处理过的环描述符。*/
 
   if(i == 0)
       i = RX_RING_SIZE;
