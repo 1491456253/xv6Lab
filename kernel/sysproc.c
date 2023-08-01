@@ -85,17 +85,27 @@ sys_sigalarm(void)
 
   p = myproc();
 
+/*使用 argint() 和 argaddr() 函数从用户空间获取 interval 和 handler 参数的值。
+如果这两个函数中的任何一个返回值小于0，则函数返回-1。*/
   if (argint(0, &interval) < 0 || argaddr(1, &handler) < 0) {
     return -1;
   }
   p->siginterval = interval;
   p->sigfunc = handler;
+  /*如果参数获取成功，sys_sigalarm 函数将当前进程的 
+  siginterval 字段设置为 interval 的值，并将 sigfunc 字段设置为 handler 的值。
+  这样做是为了在进程的 proc 结构体中保存定时器的配置信息。*/
   return 0;
 }
 
+/*用于在信号处理程序执行完毕后恢复进程的执行状态。*/
 uint64
 sys_sigreturn(void)
 {
+  /*首先，函数通过调用 myproc() 函数获取当前进程的 proc 结构体。
+  然后，它使用 memmove() 函数将 sigframe 中保存的 trapframe 
+  结构体复制回进程的 trapframe 字段。这样做是为了恢复进程在接收信号之前的执行状态。
+  接下来，函数将进程的 isentry 字段设置为0，表示进程当前不在信号处理程序中。*/
   struct proc* p = myproc();
   memmove(p->trapframe, p->sigframe, sizeof(struct trapframe));
   p->isentry = 0;
