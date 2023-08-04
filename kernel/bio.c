@@ -216,6 +216,8 @@ brelse(struct buf *b)
 
 void
 bpin(struct buf *b) {
+  /*这段代码首先计算出块号在哈希表中的桶索引，并获取该桶的锁。
+  然后，代码增加缓冲区的引用计数。最后，代码释放桶锁并返回。*/
   uint key = BUFMAP_HASH(b->dev, b->blockno);
 
   acquire(&bcache.bufmap_locks[key]);
