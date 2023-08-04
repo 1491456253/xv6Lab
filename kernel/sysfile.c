@@ -315,27 +315,36 @@ sys_open(void)
       return -1;
     }
     if(ip->type == T_SYMLINK) {
+      // 如果打开的文件是一个符号链接，并且没有指定O_NOFOLLOW标志，则需要跟踪符号链接
       if((omode & O_NOFOLLOW) == 0){
         char target[MAXPATH];
         int recursive_depth = 0;
+        // 循环跟踪符号链接，直到找到一个非符号链接文件
         while(1){
+          // 如果符号链接嵌套层数超过10层，则返回-1表示失败
           if(recursive_depth >= 10){
-	    iunlockput(ip);
-	    end_op();
-	    return -1;
+            iunlockput(ip);
+            end_op();
+            return -1;
 	  }
+      // 读取符号链接文件中存储的目标路径名
           if(readi(ip, 0, (uint64)target, ip->size-MAXPATH, MAXPATH) != MAXPATH){
 	    return -1;
 	  }
+      // 解锁并释放当前的i节点
           iunlockput(ip);
+          // 根据目标路径名查找目标文件的i节点
 	  if((ip = namei(target)) == 0){
 	    end_op();
 	    return -1;
 	  }
+     // 锁定新找到的i节点
 	  ilock(ip);
+     // 如果新找到的文件不是一个符号链接，则跳出循环
 	  if(ip->type != T_SYMLINK){
 	    break;
 	  }
+       // 如果新找到的文件仍然是一个符号链接，则继续跟踪
 	  recursive_depth++;
         }
       }
@@ -514,18 +523,21 @@ uint64
 sys_symlink(void){
   char target[MAXPATH], path[MAXPATH];
   struct inode *ip;
-
+ // 获取用户空间传递的参数
   if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0){
     return -1;
   }
 
   begin_op();
+    // 检查指定路径是否已经存在
   if((ip = namei(path)) == 0){
+    // 如果不存在，则创建一个新的符号链接文件
     ip = create(path, T_SYMLINK, 0, 0);
     iunlock(ip);
   }
 
   ilock(ip);
+   // 将目标路径名写入符号链接文件中
   if(writei(ip, 0, (uint64)target, ip->size, MAXPATH) != MAXPATH){
     return -1;
   }

@@ -3,4 +3,4 @@
 #define O_RDWR    0x002
 #define O_CREATE  0x200
 #define O_TRUNC   0x400
-#define O_NOFOLLOW  0x010
+#define O_NOFOLLOW  0x010 //表示将symbolic link文件视为普通文件打开
