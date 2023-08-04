@@ -38,14 +38,18 @@ struct {
 void
 binit(void)
 {
-  // Initialize bufmap
+  /*遍历了所有的桶，并使用initlock函数初始化了每个桶的两个锁：
+  bcache.eviction_locks[i]和bcache.bufmap_locks[i]。
+  此外，代码还将每个桶的next指针初始化为0。*/
   for(int i=0;i<NBUFMAP_BUCKET;i++) {
     initlock(&bcache.eviction_locks[i], "bcache_eviction");
     initlock(&bcache.bufmap_locks[i], "bcache_bufmap");
     bcache.bufmap[i].next = 0;
   }
 
-  // Initialize buffers
+ /*代码使用initsleeplock函数初始化了缓冲区的锁，
+ 并将缓冲区的lastuse和refcnt字段初始化为0。
+ 然后，代码将所有缓冲区都放入了第0个桶（即bufmap[0]）中。*/
   for(int i=0;i<NBUF;i++){
     struct buf *b = &bcache.buf[i];
     initsleeplock(&b->lock, "buffer");
@@ -63,6 +67,10 @@ binit(void)
 static struct buf*
 bget(uint dev, uint blockno)
 {
+  /*在块缓存中查找一个包含指定设备和块号的缓冲区。如果找到了这样一个缓冲区，
+  则函数会增加该缓冲区的引用计数，并返回指向该缓冲区的指针。
+  如果没有找到这样一个缓冲区，则函数会选择一个未使用的缓冲区，
+  将其初始化为包含指定设备和块号的数据，并返回指向该缓冲区的指针。*/
   struct buf *b;
 
   uint key = BUFMAP_HASH(dev, blockno);
@@ -89,28 +97,17 @@ bget(uint dev, uint blockno)
   // it can easily lead to circular wait, which produces deadlock.
 
   release(&bcache.bufmap_locks[key]);
-  // we need to release our bucket lock so that iterating through all the buckets won't
-  // lead to circular wait and deadlock. however, as a side effect of releasing our bucket
-  // lock, other cpus might request the same blockno at the same time and the cache buf for  
-  // blockno might be created multiple times in the worst case. since multiple concurrent
-  // bget requests might pass the "Is the block already cached?" test and start the 
-  // eviction & reuse process multiple times for the same blockno.
-  //
-  // so, after acquiring eviction_locks[key], we check "whether cache for blockno is present"
-  // once more, to be sure that we don't create duplicate cache bufs.
-  //
-  // thanks @ttzytt for pointing out that eviction_lock really just need to be per-bucket instead
-  // of globally shared.
-  
-  // block any other thread from starting a concurrent eviction for this bucket
-  // (prevent duplicate buf for the same blockno)
+  /*这段代码首先计算出块号在哈希表中的桶索引，并获取该桶的锁。
+  然后，代码遍历该桶中的所有缓冲区，查找是否有一个缓冲区已经包含了指定设备和块号的数据。
+  如果找到了这样一个缓冲区，则代码会增加该缓冲区的引用计数，并释放桶锁。
+  然后，代码获取该缓冲区的锁，并返回指向该缓冲区的指针。*/
   acquire(&bcache.eviction_locks[key]);
 
-  // Check again, is the block already cached?
-  // no other allocation targeting this bucket will happen while we are holding eviction_locks[key],
-  // which means this bucket's linked list structure can not change.
-  // so it's ok here to iterate through `bcache.bufmap[key]` without holding
-  // it's cooresponding bucket lock, since we are holding a much stronger eviction_locks[key].
+  /*如果没有找到包含指定设备和块号的缓冲区，则代码会释放桶锁，
+  并获取驱逐锁。然后，代码再次遍历该桶中的所有缓冲区，
+  以确保在释放桶锁后没有其他线程创建了新的缓冲区。
+  如果仍然没有找到包含指定设备和块号的缓冲区，则代码会执行驱逐操作，
+  选择一个未使用的缓冲区并将其初始化为包含指定设备和块号的数据。*/
   for(b = bcache.bufmap[key].next; b; b = b->next){
     if(b->dev == dev && b->blockno == blockno){
       acquire(&bcache.bufmap_locks[key]); // must do, for `refcnt++`

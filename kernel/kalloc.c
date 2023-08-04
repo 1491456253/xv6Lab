@@ -26,6 +26,7 @@ struct {
 void
 kinit()
 {
+  //对每个锁进行初始化
   for (int i = 0; i < NCPU; i++)
     initlock(&kmem[i].lock, "kmem");
   freerange(end, (void*)PHYSTOP);
@@ -90,11 +91,12 @@ kalloc(void)
     // since null is not included
     struct run * stolen = r;
 
+//从其他CPU的空闲列表中窃取内存页
     for (int i = 0; i < NCPU; i++) {
+      //遍历所有CPU。对于每个CPU，如果它不是当前CPU，则代码会尝试从该CPU的空闲列表中窃取内存页。
       if (i != me) {
         acquire(&kmem[i].lock);
         if (kmem[i].freelist) {
-          // steal half, to do so, use quick-slow pointers
           struct run * quick = kmem[i].freelist;
           struct run * slow = kmem[i].freelist;
           while (quick->next && quick->next->next) {
