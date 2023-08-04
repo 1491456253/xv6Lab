@@ -79,7 +79,13 @@ struct trapframe {
   /* 272 */ uint64 t5;
   /* 280 */ uint64 t6;
 };
-
+/*mapped：表示这个VMA是否已经被映射。
+addr：表示这个VMA的起始地址。
+len：表示这个VMA的长度。
+prot：表示这个VMA的访问权限，如只读、可读写等。
+flags：表示这个VMA的标志，如是否为共享映射等。
+offset：表示文件映射的偏移量。
+f：指向与这个VMA相关联的文件对象。*/
 #define MAXVMA 16
 struct vma {
   int mapped;
@@ -90,6 +96,7 @@ struct vma {
   int offset;
   struct file *f;
 };
+
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 

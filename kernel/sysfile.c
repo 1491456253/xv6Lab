@@ -496,18 +496,23 @@ sys_mmap(void)
   int flags;
   int offset;
   struct file *f;
+    // 获取用户空间传递的参数
   if(argaddr(0, &addr) < 0 || argfd(4, 0, &f) < 0){
     return -1;
   }
   if(argint(1, &len) < 0 || argint(2, &prot) < 0 || argint(3, &flags) < 0 || argint(5, &offset) < 0){
     return -1;
   }
-  //check the mmaptest.c to solve
-  if(!f->writable && (prot & PROT_WRITE) && flags == MAP_SHARED) return -1;
+
+  // 检查文件是否可写，如果不可写且映射类型为共享写入，则返回-1
+  if(!f->writable && (prot & PROT_WRITE) && flags == MAP_SHARED) 
+    return -1;
+  
+  // 在当前进程的VMA列表中查找一个空闲的VMA
   for(int i = 0; i < MAXVMA; i++){
     if(p->vma_table[i].mapped == 0){
+       // 找到了一个空闲的VMA，使用提供的参数初始化它
       p->vma_table[i].mapped = 1;
-      //if addr = 0, vma_table[i].addr is the top of heap (i.e. bottom of trapframe)
       p->vma_table[i].addr = addr + p->sz;
       p->vma_table[i].len = PGROUNDUP(len);
       p->vma_table[i].prot = prot;
@@ -515,9 +520,11 @@ sys_mmap(void)
       p->vma_table[i].offset = offset;
       p->vma_table[i].f = filedup(f);
       p->sz += PGROUNDUP(len);
+            // 返回新映射的起始地址
       return p->vma_table[i].addr;
     }
   }
+    // 没有找到空闲的VMA，返回-1表示失败
   return -1;
 }
 
@@ -526,19 +533,20 @@ munmap(uint64 addr, int len){
   struct proc *p = myproc();
   struct vma *pvma;
   int i = 0;
+    // 在当前进程的VMA列表中查找包含指定地址范围的VMA
   for(; i < MAXVMA; i++){
     pvma = &p->vma_table[i];
     if(pvma->mapped == 1 && addr >= pvma->addr && ((addr + len) < (pvma->addr + pvma->len))){
       break;
     }
   }
-  // not found
+ // 如果没有找到匹配的VMA，则返回-1表示失败
   if(i > MAXVMA){
     return -1;
   }
   int end = addr + len;
   int _addr = addr;
-  //readonly file can be MAP_SHARED, so need another condition f->writable
+   // 如果这是一个共享映射，则将内存中的数据写回到文件中
   if((pvma->flags == MAP_SHARED) && pvma->f->writable){
   //steal from filewritei()
     while(addr < end){
@@ -550,20 +558,21 @@ munmap(uint64 addr, int len){
        }
        iunlock(pvma->f->ip);
        end_op();
+       // 解除虚拟地址和物理内存之间的映射关系
        uvmunmap(p->pagetable, addr, 1, 1);
        addr += PGSIZE;
     }
   }
-
+  // 更新VMA的信息，以反映解除映射操作所做的更改
   if(_addr == pvma->addr){
-    //head
+    // 解除映射操作影响到了VMA的头部
     pvma->addr += len;
     pvma->len -= len;
   }else if(_addr + len == pvma->addr + pvma->len){
-    //tail
+    // 解除映射操作影响到了VMA的尾部
     pvma->len -= len;
   }
-
+ // 如果解除映射操作导致VMA变为空，则释放与该VMA相关联的资源，并将其标记为未映射
   if(pvma->len == 0 && pvma->mapped == 1){
     fileundup(pvma->f);
     pvma->mapped = 0;
@@ -576,6 +585,7 @@ sys_munmap(void)
 {
   uint64 addr;
   int len;
+  // 获取用户空间传递的参数
   if(argaddr(0, &addr) < 0 || argint(1, &len) < 0){
     return -1;
   }

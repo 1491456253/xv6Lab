@@ -301,6 +301,7 @@ fork(void)
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
 
+//保证子进程和父进程有一样的映射区域。fork 时，拷贝父进程的所有 vma，但是不拷贝物理页。
   for(int i = 0; i < MAXVMA; i++){
     if(p->vma_table[i].mapped){
       memmove(&np->vma_table[i], &p->vma_table[i], sizeof(struct vma));
@@ -359,13 +360,12 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
-
+  
+//像munmap一样释放所有mmap的区域。
   struct vma *pvma;
   for(int i = 0; i < MAXVMA; i++){
     pvma = &p->vma_table[i];
     if(pvma->mapped){
-      //uvmunmap(p->pagetable, pvma->addr, pvma->len / PGSIZE, 0);
-      //memset(pvma, 0, sizeof(struct vma));
       if(munmap(pvma->addr, pvma->len) < 0){
         panic("exit munmap");
       }
