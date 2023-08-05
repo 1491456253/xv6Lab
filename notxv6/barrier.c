@@ -30,7 +30,7 @@ barrier()
   // Block until all threads have called barrier() and
   // then increment bstate.round.
   //
-  pthread_mutex_lock(&bstate.barrier_mutex);
+  pthread_mutex_lock(&bstate.barrier_mutex);//加上锁实现同步机制
 
     if(++bstate.nthread == nthread){
         bstate.nthread = 0;

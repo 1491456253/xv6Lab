@@ -29,15 +29,15 @@ struct context {
   uint64 s11;
 };
 
-
+/*用于表示一个线程。它包含一个堆栈、一个状态和一个上下文字段。*/
 struct thread {
   char       stack[STACK_SIZE]; /* the thread's stack */
   int        state;             /* FREE, RUNNING, RUNNABLE */
   struct context contex;           /* 线程的上下文字段 */
 };
 
-struct thread all_thread[MAX_THREAD];
-struct thread *current_thread;
+struct thread all_thread[MAX_THREAD];//all_thread数组，用于存储所有线程。
+struct thread *current_thread;//current_thread指针，指向当前正在运行的线程。
 extern void thread_switch(uint64, uint64);
               
 void 
@@ -53,7 +53,8 @@ thread_init(void)
 }
 
 void 
-thread_schedule(void)
+thread_schedule(void)//用于调度线程。它会查找下一个可运行的线程，
+//并通过调用thread_switch()函数来切换到该线程。
 {
   struct thread *t, *next_thread;
 
@@ -90,6 +91,7 @@ thread_schedule(void)
 
 void 
 thread_create(void (*func)())
+/*用于创建新线程。它会查找一个空闲的线程，并将其状态设置为RUNNABLE。*/
 {
   struct thread *t;
 
@@ -105,6 +107,8 @@ thread_create(void (*func)())
 
 void 
 thread_yield(void)
+/*用于让出CPU。它会将当前线程的状态设置为RUNNABLE，
+并调用thread_schedule()函数来调度下一个线程。*/
 {
   current_thread->state = RUNNABLE;
   thread_schedule();
