@@ -135,6 +135,7 @@ e1000_transmit(struct mbuf *m)
   release(&e1000_lock);
   /*最后，通过将1添加到E1000_TDT模TX_RING_SIZE来更新环位置，并释放锁。
   如果成功将mbuf添加到环中，则返回0；否则返回-1。*/
+  
   return 0;
 }
  
